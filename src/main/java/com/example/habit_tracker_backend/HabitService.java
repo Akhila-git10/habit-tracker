@@ -1,27 +1,40 @@
 package com.example.habit_tracker_backend;
 
-import java.util.ArrayList;
 import java.util.List;
 
-public class HabitService {
-    
-    private List<Habit> habits = new ArrayList<>();
+import org.springframework.stereotype.Service;
 
-    public void addHabit(Habit habit){
-        habits.add(habit);
+@Service
+public class HabitService {
+
+    private HabitRepository habitRepository;
+
+    public HabitService(HabitRepository habitRepository) {
+        this.habitRepository = habitRepository;
+    }
+
+    public Habit addHabit(Habit habit) {
+        return habitRepository.save(habit);
     }
 
     public List<Habit> getAllHabits() {
-        return habits;
+        return habitRepository.findAll();
     }
 
-    public Habit findById(int id){
+    public Habit findById(int id) {
 
-        for(Habit habit :  habits){
-            if(habit.id == id){
-                return habit;
-            }
-        }
-        return  null;
+        return habitRepository.findById(id).orElse(null);
+    }
+
+    public Habit updateHabit(int id, Habit updatedHabit) {
+        Habit existingHabit = findById(id);
+        existingHabit.name = updatedHabit.name;
+        existingHabit.description = updatedHabit.description;
+        existingHabit.id = id;
+        return habitRepository.save(existingHabit);
+    }
+
+    public void deleteHabit(int id) {
+        habitRepository.deleteById(id);
     }
 }
