@@ -36,14 +36,12 @@ public class HabitController {
 
     @PutMapping("/habits/{id}")
     public Habit updateHabit(@PathVariable int id, @RequestBody Habit habit) {
-        habitService.updateHabit(id, habit);
-        return habit;
+        return habitService.updateHabit(id, habit);
     }
 
     @DeleteMapping("/habits/{id}")
-    public Habit deleteHabit(@PathVariable int id, @RequestBody Habit habit) {
+    public void deleteHabit(@PathVariable int id, @RequestBody Habit habit) {
         habitService.deleteHabit(id);
-        return habit;
     }
 
 }
