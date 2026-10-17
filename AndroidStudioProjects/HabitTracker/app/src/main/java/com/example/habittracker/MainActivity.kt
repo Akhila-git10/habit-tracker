@@ -34,6 +34,11 @@ import androidx.compose.runtime.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.LinearProgressIndicator
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.LaunchedEffect
+import org.json.JSONArray
+import org.json.JSONObject
 
 
 private data class HabitItem(
@@ -41,6 +46,45 @@ private data class HabitItem(
     val emoji: String,
     val completed: Boolean = false
 )
+
+private fun saveHabits(context: Context, habits: List<HabitItem>) {
+    val jsonArray = JSONArray()
+
+    habits.forEach { habit ->
+        val item = JSONObject()
+        item.put("name", habit.name)
+        item.put("emoji", habit.emoji)
+        item.put("completed", habit.completed)
+        jsonArray.put(item)
+    }
+
+    context.getSharedPreferences("habit_data", Context.MODE_PRIVATE)
+        .edit()
+        .putString("habits", jsonArray.toString())
+        .apply()
+}
+
+private fun loadHabits(context: Context): List<HabitItem> {
+    val savedData = context.getSharedPreferences(
+        "habit_data", Context.MODE_PRIVATE
+    ).getString("habits", null) ?: return listOf(
+        HabitItem("Drink Water", "💧"),
+        HabitItem("Walk", "🚶"),
+        HabitItem("Screen Free Time", "📵"),
+        HabitItem("Meditation", "🧘")
+    )
+
+    val jsonArray = JSONArray(savedData)
+
+    return List(jsonArray.length()) { index ->
+        val item = jsonArray.getJSONObject(index)
+        HabitItem(
+            name = item.getString("name"),
+            emoji = item.getString("emoji"),
+            completed = item.optBoolean("completed", false)
+        )
+    }
+}
 
 
 class MainActivity : ComponentActivity() {
@@ -58,17 +102,15 @@ fun HabitTrackerScreen() {
     var showAddHabit by remember { mutableStateOf(false) }
     var newHabitName by remember { mutableStateOf( "") }
     var selectedEmoji by remember { mutableStateOf("⭐") }
+    val context = LocalContext.current
+
     var habits by remember {
-        mutableStateOf(
-            listOf(
-                HabitItem("Drink Water", "💧"),
-                HabitItem("Walk", "🚶"),
-                HabitItem("Screen Free Time", "📵"),
-                HabitItem("Meditation", "🧘")
-            )
-        )
+        mutableStateOf(loadHabits(context))
     }
     val completedHabits = habits.count { it.completed }
+    LaunchedEffect(habits) {
+        saveHabits(context, habits)
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -117,6 +159,11 @@ fun HabitTrackerScreen() {
                         } else {
                             item
                         }
+                    }
+                },
+                onDelete = {
+                    habits = habits.filterIndexed { itemIndex, _ ->
+                        itemIndex != index
                     }
                 }
             )
@@ -186,7 +233,8 @@ fun HabitTrackerScreen() {
         name: String,
         emoji: String ,
         completed: Boolean,
-        onCompletionChange: (Boolean) -> Unit
+        onCompletionChange: (Boolean) -> Unit ,
+        onDelete: () -> Unit
     ) {
         Row(
             modifier = Modifier
@@ -209,6 +257,14 @@ fun HabitTrackerScreen() {
                 checked = completed,
                 onCheckedChange = { isChecked ->
                     onCompletionChange(isChecked) }
+            )
+            Text(
+                text = "✕",
+                color = Color(0xFFB04A5A),
+                fontSize = 20.sp,
+                modifier = Modifier
+                    .clickable { onDelete() }
+                    .padding(8.dp)
             )
             if (completed) {
                 Text(
