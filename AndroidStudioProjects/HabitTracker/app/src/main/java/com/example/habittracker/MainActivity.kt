@@ -1,45 +1,44 @@
+
 package com.example.habittracker
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Color
-import androidx.compose.material3.Checkbox
-import androidx.compose.foundation.layout.Row
-import androidx.compose.ui.Alignment
-import androidx.compose.runtime.*
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.LinearProgressIndicator
-import android.content.Context
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import androidx.compose.runtime.LaunchedEffect
+import java.time.LocalDate
 
+private val Cream = Color(0xFFFFFBFF)
+private val Blush = Color(0xFFF4EEFF)
+private val Rose = Color(0xFFB9A5E8)
+private val DarkRose = Color(0xFF776493)
+private val Brown = Color(0xFF494253)
+private val MutedBrown = Color(0xFF9A93A5)
+private val Sage = Color(0xFFE8DFF7)
+private val DeepSage = Color(0xFF9B85C4)
+private val White = Color(0xFFFFFFFF)
+private val BorderPink = Color(0xFFEDE5F7)
 
 private data class HabitItem(
     val name: String,
@@ -48,234 +47,720 @@ private data class HabitItem(
 )
 
 private fun saveHabits(context: Context, habits: List<HabitItem>) {
-    val jsonArray = JSONArray()
+    val array = JSONArray()
 
     habits.forEach { habit ->
-        val item = JSONObject()
-        item.put("name", habit.name)
-        item.put("emoji", habit.emoji)
-        item.put("completed", habit.completed)
-        jsonArray.put(item)
+        array.put(
+            JSONObject().apply {
+                put("name", habit.name)
+                put("emoji", habit.emoji)
+                put("completed", habit.completed)
+            }
+        )
     }
 
     context.getSharedPreferences("habit_data", Context.MODE_PRIVATE)
         .edit()
-        .putString("habits", jsonArray.toString())
+        .putString("habits", array.toString())
         .apply()
 }
 
 private fun loadHabits(context: Context): List<HabitItem> {
-    val savedData = context.getSharedPreferences(
+    val saved = context.getSharedPreferences(
         "habit_data", Context.MODE_PRIVATE
-    ).getString("habits", null) ?: return listOf(
-        HabitItem("Drink Water", "💧"),
-        HabitItem("Walk", "🚶"),
-        HabitItem("Screen Free Time", "📵"),
-        HabitItem("Meditation", "🧘")
-    )
+    ).getString("habits", null) ?: return emptyList()
 
-    val jsonArray = JSONArray(savedData)
-
-    return List(jsonArray.length()) { index ->
-        val item = jsonArray.getJSONObject(index)
-        HabitItem(
-            name = item.getString("name"),
-            emoji = item.getString("emoji"),
-            completed = item.optBoolean("completed", false)
-        )
+    return try {
+        val array = JSONArray(saved)
+        List(array.length()) { index ->
+            val item = array.getJSONObject(index)
+            HabitItem(
+                name = item.getString("name"),
+                emoji = item.getString("emoji"),
+                completed = item.optBoolean("completed", false)
+            )
+        }
+    } catch (e: Exception) {
+        return emptyList()
     }
 }
+
+
+
+private fun saveHabitHistory(
+    context: Context,
+    history: org.json.JSONArray
+) {
+    val filteredHistory = org.json.JSONArray()
+    val dateFormat = java.text.SimpleDateFormat(
+        "yyyy-MM-dd",
+        java.util.Locale.US
+    )
+    val cutoffCalendar = java.util.Calendar.getInstance()
+    cutoffCalendar.add(java.util.Calendar.DAY_OF_YEAR, -89)
+    val cutoffDate = dateFormat.format(cutoffCalendar.time)
+
+    for (i in 0 until history.length()) {
+        val entry = history.getJSONObject(i)
+        val date = entry.getString("date")
+
+        if (date >= cutoffDate) {
+            filteredHistory.put(entry)
+        }
+    }
+
+    context.getSharedPreferences("habit_data", Context.MODE_PRIVATE)
+        .edit()
+        .putString("habit_history", filteredHistory.toString())
+        .apply()
+}
+
+fun loadHabitHistory(context: Context): JSONArray {
+    val saved = context.getSharedPreferences(
+        "habit_data",
+        Context.MODE_PRIVATE
+    ).getString("habit_history", "[]")
+
+    return try {
+        JSONArray(saved)
+    } catch (e: Exception) {
+        JSONArray()
+    }
+}
+
+
+
+private fun recordTodayHistory(
+    context: Context,
+    habits: List<HabitItem>
+) {
+    val prefs = context.getSharedPreferences(
+        "habit_data",
+        Context.MODE_PRIVATE
+    )
+
+    val today = java.text.SimpleDateFormat(
+        "yyyy-MM-dd",
+        java.util.Locale.US
+    ).format(java.util.Date())
+
+    val history = try {
+        org.json.JSONArray(
+            prefs.getString("habit_history", "[]")
+        )
+    } catch (e: Exception) {
+        org.json.JSONArray()
+    }
+
+    val updatedHistory = org.json.JSONArray()
+    var todayEntry: org.json.JSONObject? = null
+
+    for (i in 0 until history.length()) {
+        val entry = history.getJSONObject(i)
+
+        if (entry.optString("date") == today) {
+            todayEntry = entry
+        } else {
+            updatedHistory.put(entry)
+        }
+    }
+
+    // Keep today's existing habits, including ones now deleted.
+    val habitRecords = org.json.JSONArray()
+
+    habits.forEach { habit ->
+        var found = false
+
+        for (i in 0 until habitRecords.length()) {
+            val existing = habitRecords.getJSONObject(i)
+
+            if (existing.optString("name") == habit.name) {
+                existing.put("emoji", habit.emoji)
+                existing.put("completed", habit.completed)
+                found = true
+                break
+            }
+        }
+
+        if (!found) {
+            habitRecords.put(
+                org.json.JSONObject().apply {
+                    put("name", habit.name)
+                    put("emoji", habit.emoji)
+                    put("completed", habit.completed)
+                }
+            )
+        }
+    }
+
+    updatedHistory.put(
+        org.json.JSONObject().apply {
+            put("date", today)
+            put("habits", habitRecords)
+        }
+    )
+
+    saveHabitHistory(context, updatedHistory)
+}
+
+
+
+
 
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContent {
-            HabitTrackerScreen()
+            MaterialTheme {
+                HabitTrackerScreen()
+            }
         }
     }
 }
 
 @Composable
 fun HabitTrackerScreen() {
-    var showAddHabit by remember { mutableStateOf(false) }
-    var newHabitName by remember { mutableStateOf( "") }
-    var selectedEmoji by remember { mutableStateOf("⭐") }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    var habits by remember {
-        mutableStateOf(loadHabits(context))
+    var habits by remember { mutableStateOf(loadHabits(context)) }
+    LaunchedEffect(Unit) {
+        val today = java.time.LocalDate.now().toString()
+        val prefs = context.getSharedPreferences(
+            "habit_data",
+            android.content.Context.MODE_PRIVATE
+        )
+        val lastDate = prefs.getString("last_reset_date", "")
+
+        if (lastDate != today) {
+            habits = habits.map { it.copy(completed = false) }
+            prefs.edit().putString("last_reset_date", today).apply()
+        }
     }
-    val completedHabits = habits.count { it.completed }
-    LaunchedEffect(habits) {
-        saveHabits(context, habits)
+
+    var showAddHabit by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
+    var newHabitName by remember { mutableStateOf("") }
+    var selectedEmoji by remember { mutableStateOf("⭐") }
+
+    var backendHabits by remember {
+        mutableStateOf<List<Habit>>(emptyList())
     }
+    var backendError by remember { mutableStateOf<String?>(null) }
+    var loadingBackend by remember { mutableStateOf(false) }
+
+    val completed = habits.count { it.completed }
+    val progress = if (habits.isEmpty()) 0f
+    else completed.toFloat() / habits.size
+
+    var resetComplete by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val today = java.time.LocalDate.now().toString()
+        val prefs = context.getSharedPreferences(
+            "habit_data",
+            android.content.Context.MODE_PRIVATE
+        )
+        val lastDate = prefs.getString("last_reset_date", "")
+
+        if (lastDate != today) {
+            habits = habits.map { it.copy(completed = false) }
+            prefs.edit().putString("last_reset_date", today).apply()
+        }
+
+        resetComplete = true
+    }
+
+    LaunchedEffect(habits, resetComplete) {
+        if (resetComplete) {
+            saveHabits(context, habits)
+            recordTodayHistory(context, habits)
+        }
+    }
+
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFFFFBF2))
-                .padding(20.dp).verticalScroll
-            (rememberScrollState())
-    )
-    {
-        Text("My Habits", fontSize = 32.sp)
-        Spacer(modifier = Modifier.height(24.dp))
-        Text("Build better habits everyday", fontSize = 16.sp)
-        Spacer(modifier = Modifier.height(24.dp))
-        Text( " Today " , fontSize = 20.sp)
-        Text(
-            text = "$completedHabits of ${habits.size} habits completed ✨  ${
-                if (habits.isEmpty()) 0
-                else (completedHabits * 100 / habits.size)
-            }%",
-            fontSize = 16.sp,
-            color = Color(0xFF6A5A7A)
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
-        LinearProgressIndicator(
-            progress = {
-                if (habits.isEmpty()) 0f
-                else completedHabits.toFloat() / habits.size
-            },
+            .fillMaxWidth()
+            .background(Cream)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        // Header
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(8.dp),
-            color = Color(0xFF8BC9A8),
-            trackColor = Color(0xFFEDE7F6)
-        )
-        Spacer(modifier = Modifier.height(24.dp))
+                .background(Blush, RoundedCornerShape(28.dp))
+                .padding(22.dp)
+        ) {
+            Text("YOUR LITTLE SPACE 🌷", color = DarkRose,
+                fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp)
+
+            Spacer(Modifier.height(10.dp))
+
+            Text(
+                "My Habits",
+                fontSize = 34.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Brown
+            )
+
+            Spacer(Modifier.height(5.dp))
+
+            Spacer(Modifier.height(14.dp))
+
+            Text("♡  one day at a time  ♡",
+                color = DarkRose, fontSize = 14.sp)
+        }
+
+        // Progress summary
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(Modifier.padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Today's progress ✨",
+                            color = Brown, fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(5.dp))
+                        Text("$completed of ${habits.size} habits completed",
+                            color = MutedBrown, fontSize = 13.sp)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(58.dp)
+                            .background(Sage, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("${(progress * 100).toInt()}%",
+                            color = DeepSage,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp)
+                    }
+                }
+
+                Spacer(Modifier.height(18.dp))
+
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(9.dp),
+                    color = DeepSage,
+                    trackColor = Sage,
+                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            }
+        }
+
+        // Habit list heading
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    "${habits.size} habits",
+                    fontSize = 13.sp,
+                    color = MutedBrown
+                )
+
+                Text(
+                    "🗓️ History",
+                    modifier = Modifier.clickable {
+                        showHistory = !showHistory
+                    },
+                    fontSize = 13.sp,
+                    color = DarkRose,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            Text("${habits.size} habits",
+                fontSize = 13.sp, color = MutedBrown)
+        }
 
         habits.forEachIndexed { index, habit ->
             HabitCard(
                 name = habit.name,
                 emoji = habit.emoji,
                 completed = habit.completed,
-                onCompletionChange = { isCompleted ->
-                    habits = habits.mapIndexed { itemIndex, item ->
-                        if (itemIndex == index) {
-                            item.copy(completed = isCompleted)
-                        } else {
-                            item
+
+                onCompletionChange = { checked ->
+                    habits = habits.mapIndexed { i, item ->
+                        if (i == index) item.copy(completed = checked) else item
+                    }
+
+                    scope.launch {
+                        try {
+                            backendHabits = RetrofitClient.api.getHabits()
+
+                            val backendHabit = backendHabits.firstOrNull {
+                                it.name.equals(habit.name, ignoreCase = true)
+                            }
+
+                            if (backendHabit != null) {
+                                RetrofitClient.api.updateHabit(
+                                    backendHabit.id,
+                                    backendHabit.copy(completedToday = checked)
+                                )
+
+                                backendHabits = RetrofitClient.api.getHabits()
+                            } else {
+                                backendError = "Backend habit not found for: ${habit.name}"
+                            }
+                        } catch (e: Exception) {
+                            backendError = "Could not update habit: ${e.message}"
                         }
                     }
                 },
+
                 onDelete = {
-                    habits = habits.filterIndexed { itemIndex, _ ->
-                        itemIndex != index
+                    scope.launch {
+                        try {
+                            // Refresh backend data first
+                            backendHabits = RetrofitClient.api.getHabits()
+
+                            val habitToDelete = backendHabits.find {
+                                it.name == habit.name
+                            }
+
+                            if (habitToDelete != null) {
+                                RetrofitClient.api.deleteHabit(habitToDelete.id)
+                                backendHabits = RetrofitClient.api.getHabits()
+                            }
+
+                            habits = habits.filterIndexed { i, _ -> i != index }
+                            recordTodayHistory(context, habits)
+
+                        } catch (e: Exception) {
+                            backendError = "Could not delete habit: ${e.message}"
+                        }
                     }
                 }
             )
-            Spacer(modifier = Modifier.height(12.dp))
         }
 
-        val habitEmojis = listOf("⭐", "💧", "🚶", "🧘", "📚", "🏃", "🥗", "💤", "🎯", "❤️")
+        // Add habit form
         if (showAddHabit) {
-            OutlinedTextField(
-                value = newHabitName,
-                onValueChange = { newHabitName = it },
-                label = { Text("Enter habit name") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = White),
+                border = androidx.compose.foundation.BorderStroke(1.dp, BorderPink)
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text("Create a new habit 🌸",
+                        fontSize = 19.sp, fontWeight = FontWeight.Bold,
+                        color = Brown)
 
-            Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = newHabitName,
+                        onValueChange = { newHabitName = it },
+                        label = { Text("Habit name") },
+                        placeholder = { Text("e.g. Read for 10 minutes") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Rose,
+                            focusedLabelColor = DarkRose,
+                            cursorColor = Rose
+                        )
+                    )
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ){
-                habitEmojis.forEach { emoji ->
-                    Text(
-                        text = if(selectedEmoji==emoji) "✓$emoji" else emoji,
-                        fontSize = 28.sp ,
-                        modifier = Modifier.clickable{
-                            selectedEmoji = emoji
+                    Text("Choose an emoji",
+                        color = MutedBrown, fontSize = 14.sp)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        listOf("⭐", "💧", "🚶", "🧘", "📚",
+                            "🏃", "🥗", "💤", "🎯", "❤️").forEach { emoji ->
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .background(
+                                        if (selectedEmoji == emoji) Blush
+                                        else Cream,
+                                        RoundedCornerShape(14.dp)
+                                    )
+                                    .clickable { selectedEmoji = emoji },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    if (selectedEmoji == emoji) "✓$emoji"
+                                    else emoji,
+                                    fontSize = 20.sp
+                                )
+                            }
                         }
+                    }
+
+                    Button(
+
+                        onClick = {
+                            val name = newHabitName.trim()
+
+                            if (name.isNotEmpty()) {
+                                scope.launch {
+                                    try {
+                                        val savedHabit = RetrofitClient.api.addHabit(
+                                            Habit(
+                                                id = 0,
+                                                name = name,
+                                                description = name,
+                                                completedToday = false
+                                            )
+                                        )
+
+                                        habits = habits + HabitItem(
+                                            savedHabit.name,
+                                            selectedEmoji
+                                        )
+
+                                        backendHabits = RetrofitClient.api.getHabits()
+                                        newHabitName = ""
+                                        selectedEmoji = "⭐"
+                                        showAddHabit = false
+
+                                    } catch (e: Exception) {
+                                        backendError = "Could not save habit: ${e.message}"
+                                    }
+                                }
+                            }
+                        },
+
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Rose
+                        )
+                    ) {
+                        Text("Save my habit ♡",
+                            color = White, fontWeight = FontWeight.Bold)
+                    }
+
+                    Text(
+                        "Cancel",
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .clickable { showAddHabit = false }
+                            .padding(6.dp),
+                        color = MutedBrown
                     )
                 }
             }
-
+        } else {
             Button(
-                onClick = {
-                    val name = newHabitName.trim()
-                    if (name.isNotEmpty()) {
-                        habits = habits +  HabitItem(
-                            name = name,
-                            emoji = selectedEmoji
-                        )
-                        selectedEmoji = "⭐"
-                        newHabitName = ""
-                        showAddHabit = false
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
+                onClick = { showAddHabit = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Rose
+                )
             ) {
-                Text("Save Habit")
+                Text("+  Add a new habit",
+                    color = White, fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold)
             }
         }
 
-        Button(
-            onClick = { showAddHabit = true },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFEDE7F6)
-            )
-        ) {
-            Text("+ Add Habit", color = Color(0xFF6A5A7A))
-        }
+        // Optional backend loading section
+//        Card(
+//            modifier = Modifier.fillMaxWidth(),
+//            shape = RoundedCornerShape(20.dp),
+//            colors = CardDefaults.cardColors(containerColor = Blush)
+//        ) {
+//            Column(
+//                modifier = Modifier.padding(16.dp),
+//                verticalArrangement = Arrangement.spacedBy(10.dp)
+//            ) {
+//                Text("Connected app data ☁️",
+//                    color = Brown, fontWeight = FontWeight.Bold,
+//                    fontSize = 16.sp)
+//
+//                Text("Load habits from your backend when it is available.",
+//                    color = MutedBrown, fontSize = 13.sp)
+//
+//                OutlinedButton(
+//                    onClick = {
+//                        loadingBackend = true
+//                        backendError = null
+//
+//                        scope.launch {
+//                            try {
+//                                backendHabits = RetrofitClient.api.getHabits()
+//                                println("SYNC RESULT: $backendHabits")
+//                            } catch (e: Exception) {
+//                                backendError = e.toString()
+//                                println("SYNC ERROR: ${e.message}")
+//                            } finally {
+//                                loadingBackend = false
+//                            }
+//                        }
+//                    },
+//                    enabled = !loadingBackend,
+//                    modifier = Modifier.fillMaxWidth(),
+//                    shape = RoundedCornerShape(14.dp)
+//                ) {
+//                    Text(if (loadingBackend) "Connecting..."
+//                    else "Sync backend habits")
+//                }
+//
+//                backendError?.let {
+//                    Text("Connection issue: $it",
+//                        color = DarkRose, fontSize = 12.sp)
+//                }
+//
+//                backendHabits.forEach { habit ->
+//                    Text("${habit.name} — ${habit.description}",
+//                        color = Brown, fontSize = 14.sp)
+//                }
+//            }
+//        }
 
+        Text(
+            "You're doing better than you think ♡",
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+            color = MutedBrown,
+            fontSize = 13.sp
+        )
+
+        if (showHistory) {
+            Text(
+                "Your Habit History 🗓️",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Brown
+            )
+
+            val history = loadHabitHistory(context)
+
+            Column {
+                for (i in history.length() - 1 downTo 0) {
+                    val day = history.getJSONObject(i)
+                    val date = day.optString("date", "")
+
+                    Text(
+                        text = "🗓️ $date",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Brown
+                    )
+
+                    val dayHabits = day.getJSONArray("habits")
+
+                    for (j in 0 until dayHabits.length()) {
+                        val habit = dayHabits.getJSONObject(j)
+                        val completed = habit.optBoolean("completed", false)
+
+                        Text(
+                            text = "${habit.optString("emoji")} " +
+                                    "${habit.optString("name")} " +
+                                    if (completed) "✓" else "○",
+                            color = MutedBrown
+                        )
+                    }
+                }
+            }
         }
     }
+}
 
-
-    @Composable
-    fun HabitCard(
-        name: String,
-        emoji: String ,
-        completed: Boolean,
-        onCompletionChange: (Boolean) -> Unit ,
-        onDelete: () -> Unit
+@Composable
+fun HabitCard(
+    name: String,
+    emoji: String,
+    completed: Boolean,
+    onCompletionChange: (Boolean) -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (completed) Color(0xFFF0F5EC) else White
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp, if (completed) Sage else BorderPink
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    if (completed) Color(0xFFB0DCC5)
-                    else Color(0xFFE3F4EC),
-                    RoundedCornerShape(16.dp)
-                )
-                .padding(12.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                "$emoji $name",
-                fontSize = 20.sp,
-                modifier = Modifier.weight(1f)
-            )
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        if (completed) Sage else Blush,
+                        RoundedCornerShape(16.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(emoji, fontSize = 24.sp)
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    name,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (completed) DeepSage else Brown
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    if (completed) "Lovely work! ✨" else "One small step at a time",
+                    fontSize = 11.sp,
+                    color = MutedBrown
+                )
+            }
 
             Checkbox(
                 checked = completed,
-                onCheckedChange = { isChecked ->
-                    onCompletionChange(isChecked) }
+                onCheckedChange = onCompletionChange,
+                colors = CheckboxDefaults.colors(
+                    checkedColor = DeepSage,
+                    uncheckedColor = Rose,
+                    checkmarkColor = White
+                )
             )
+
             Text(
-                text = "✕",
-                color = Color(0xFFB04A5A),
-                fontSize = 20.sp,
+                "×",
                 modifier = Modifier
                     .clickable { onDelete() }
-                    .padding(8.dp)
+                    .padding(start = 5.dp, end = 2.dp),
+                fontSize = 23.sp,
+                color = MutedBrown
             )
-            if (completed) {
-                Text(
-                    text = "Done! ✨",
-                    fontSize = 12.sp ,
-                    color = Color(0xFF356B50)
-                )
-            }
         }
     }
-
-
-
-
+}
