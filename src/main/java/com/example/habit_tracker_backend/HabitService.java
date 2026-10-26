@@ -26,15 +26,22 @@ public class HabitService {
         return habitRepository.findById(id).orElse(null);
     }
 
-    public Habit updateHabit(int id, Habit updatedHabit) {
-        Habit existingHabit = findById(id);
-        existingHabit.name = updatedHabit.name;
-        existingHabit.description = updatedHabit.description;
-        existingHabit.id = id;
-        return habitRepository.save(existingHabit);
-    }
+   
+public Habit updateHabit(int id, Habit updatedHabit) {
+    Habit existingHabit = findById(id);
+    existingHabit.name = updatedHabit.name;
+    existingHabit.description = updatedHabit.description;
+    existingHabit.completedToday = updatedHabit.completedToday;
+    existingHabit.id = id;
+    return habitRepository.save(existingHabit);
+}
+
 
     public void deleteHabit(int id) {
         habitRepository.deleteById(id);
     }
+
+    public void deleteAllHabits() {
+    habitRepository.deleteAll();
+}
 }

@@ -40,8 +40,13 @@ public class HabitController {
     }
 
     @DeleteMapping("/habits/{id}")
-    public void deleteHabit(@PathVariable int id, @RequestBody Habit habit) {
+    public void deleteHabit(@PathVariable int id) {
         habitService.deleteHabit(id);
+    }
+
+    @DeleteMapping("/habits")
+    public void deleteAllHabits() {
+    habitService.deleteAllHabits();
     }
 
 }
