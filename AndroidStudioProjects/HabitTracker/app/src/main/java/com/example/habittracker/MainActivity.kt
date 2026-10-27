@@ -28,6 +28,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.runtime.LaunchedEffect
 import java.time.LocalDate
+import androidx.activity.compose.BackHandler
 
 private val Cream = Color(0xFFFFFBFF)
 private val Blush = Color(0xFFF4EEFF)
@@ -99,6 +100,7 @@ private fun saveHabitHistory(
     val cutoffCalendar = java.util.Calendar.getInstance()
     cutoffCalendar.add(java.util.Calendar.DAY_OF_YEAR, -89)
     val cutoffDate = dateFormat.format(cutoffCalendar.time)
+    println("90-DAY TEST CUTOFF: $cutoffDate")
 
     for (i in 0 until history.length()) {
         val entry = history.getJSONObject(i)
@@ -114,6 +116,7 @@ private fun saveHabitHistory(
         .putString("habit_history", filteredHistory.toString())
         .apply()
 }
+
 
 fun loadHabitHistory(context: Context): JSONArray {
     val saved = context.getSharedPreferences(
@@ -241,6 +244,9 @@ fun HabitTrackerScreen() {
 
     var showAddHabit by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    BackHandler(showHistory) {
+        showHistory = false
+    }
     var newHabitName by remember { mutableStateOf("") }
     var selectedEmoji by remember { mutableStateOf("⭐") }
 
@@ -279,6 +285,13 @@ fun HabitTrackerScreen() {
         }
     }
 
+    if (showHistory) {
+        CalendarHistoryScreen(
+            context = context,
+            onBack = { showHistory = false }
+        )
+    } else {
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -294,9 +307,11 @@ fun HabitTrackerScreen() {
                 .background(Blush, RoundedCornerShape(28.dp))
                 .padding(22.dp)
         ) {
-            Text("YOUR LITTLE SPACE 🌷", color = DarkRose,
+            Text(
+                "YOUR LITTLE SPACE 🌷", color = DarkRose,
                 fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp)
+                letterSpacing = 2.sp
+            )
 
             Spacer(Modifier.height(10.dp))
 
@@ -311,9 +326,13 @@ fun HabitTrackerScreen() {
 
             Spacer(Modifier.height(14.dp))
 
-            Text("♡  one day at a time  ♡",
-                color = DarkRose, fontSize = 14.sp)
+            Text(
+                "♡  one day at a time  ♡",
+                color = DarkRose, fontSize = 14.sp
+            )
         }
+
+        // Progress summary
 
         // Progress summary
         Card(
@@ -378,7 +397,7 @@ fun HabitTrackerScreen() {
                 Text(
                     "🗓️ History",
                     modifier = Modifier.clickable {
-                        showHistory = !showHistory
+                        showHistory = true
                     },
                     fontSize = 13.sp,
                     color = DarkRose,
@@ -645,40 +664,212 @@ fun HabitTrackerScreen() {
             color = MutedBrown,
             fontSize = 13.sp
         )
+    }
+    }
+}
 
-        if (showHistory) {
+@Composable
+fun CalendarHistoryScreen(
+    context: Context,
+    onBack: () -> Unit
+) {
+    var currentMonth by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
+    var selectedDate by remember { mutableStateOf(LocalDate.now().toString()) }
+
+    val history = loadHabitHistory(context)
+    val historyByDate = remember(history.toString()) {
+        buildMap {
+            for (i in 0 until history.length()) {
+                val entry = history.getJSONObject(i)
+                put(entry.optString("date"), entry)
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Blush)
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        Text(
+            "← Back to my habits",
+            modifier = Modifier.clickable { onBack() },
+            color = DarkRose,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            "My Habit Calendar 🗓️",
+            color = Brown,
+            fontSize = 27.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                "Your Habit History 🗓️",
-                fontSize = 24.sp,
+                "‹",
+                modifier = Modifier
+                    .clickable { currentMonth = currentMonth.minusMonths(1) }
+                    .padding(8.dp),
+                fontSize = 28.sp,
+                color = DarkRose
+            )
+
+            Text(
+                currentMonth.month.name.lowercase()
+                    .replaceFirstChar { it.uppercase() } +
+                        " ${currentMonth.year}",
+                fontSize = 19.sp,
                 fontWeight = FontWeight.Bold,
                 color = Brown
             )
 
-            val history = loadHabitHistory(context)
+            Text(
+                "›",
+                modifier = Modifier
+                    .clickable { currentMonth = currentMonth.plusMonths(1) }
+                    .padding(8.dp),
+                fontSize = 28.sp,
+                color = DarkRose
+            )
+        }
 
-            Column {
-                for (i in history.length() - 1 downTo 0) {
-                    val day = history.getJSONObject(i)
-                    val date = day.optString("date", "")
-
-                    Text(
-                        text = "🗓️ $date",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Brown
-                    )
-
-                    val dayHabits = day.getJSONArray("habits")
-
-                    for (j in 0 until dayHabits.length()) {
-                        val habit = dayHabits.getJSONObject(j)
-                        val completed = habit.optBoolean("completed", false)
-
+        Card(
+            colors = CardDefaults.cardColors(containerColor = White),
+            shape = RoundedCornerShape(22.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(Modifier.fillMaxWidth()) {
+                    listOf("M", "T", "W", "T", "F", "S", "S").forEach {
                         Text(
-                            text = "${habit.optString("emoji")} " +
-                                    "${habit.optString("name")} " +
-                                    if (completed) "✓" else "○",
-                            color = MutedBrown
+                            it,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
+                            color = MutedBrown,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                val firstDayOffset =
+                    currentMonth.dayOfWeek.value - 1
+                val daysInMonth =
+                    currentMonth.lengthOfMonth()
+                val totalCells = ((firstDayOffset + daysInMonth + 6) / 7) * 7
+
+                for (weekStart in 0 until totalCells step 7) {
+                    Row(Modifier.fillMaxWidth()) {
+                        for (column in 0..6) {
+                            val cell = weekStart + column
+                            val dayNumber = cell - firstDayOffset + 1
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(0.85f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (dayNumber in 1..daysInMonth) {
+                                    val date = currentMonth
+                                        .withDayOfMonth(dayNumber)
+                                        .toString()
+                                    val hasHistory = historyByDate.containsKey(date)
+                                    val isSelected = selectedDate == date
+
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                if (isSelected) Blush else Color.Transparent,
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { selectedDate = date },
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            "$dayNumber",
+                                            color = if (isSelected) DarkRose else Brown,
+                                            fontWeight = if (isSelected)
+                                                FontWeight.Bold else FontWeight.Normal
+                                        )
+
+                                        Text(
+                                            if (hasHistory) "•" else " ",
+                                            color = DeepSage,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Text(
+            "Habits on $selectedDate",
+            color = Brown,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        val selectedEntry = historyByDate[selectedDate]
+
+        if (selectedEntry == null) {
+            Text(
+                "No saved habit history for this date 🌱",
+                color = MutedBrown,
+                fontSize = 14.sp
+            )
+        } else {
+            val dayHabits = selectedEntry.getJSONArray("habits")
+
+            if (dayHabits.length() == 0) {
+                Text("No habits recorded for this day.", color = MutedBrown)
+            }
+
+            for (i in 0 until dayHabits.length()) {
+                val habit = dayHabits.getJSONObject(i)
+                val completed = habit.optBoolean("completed", false)
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = White),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            habit.optString("emoji", "⭐"),
+                            fontSize = 22.sp
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            habit.optString("name"),
+                            modifier = Modifier.weight(1f),
+                            color = Brown
+                        )
+                        Text(
+                            if (completed) "✓ Done" else "○ Not done",
+                            color = if (completed) DeepSage else MutedBrown,
+                            fontSize = 12.sp
                         )
                     }
                 }
