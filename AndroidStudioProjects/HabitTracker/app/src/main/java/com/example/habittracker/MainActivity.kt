@@ -100,8 +100,7 @@ private fun saveHabitHistory(
     val cutoffCalendar = java.util.Calendar.getInstance()
     cutoffCalendar.add(java.util.Calendar.DAY_OF_YEAR, -89)
     val cutoffDate = dateFormat.format(cutoffCalendar.time)
-    println("90-DAY TEST CUTOFF: $cutoffDate")
-
+   
     for (i in 0 until history.length()) {
         val entry = history.getJSONObject(i)
         val date = entry.getString("date")
